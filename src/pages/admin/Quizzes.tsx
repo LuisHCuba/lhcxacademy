@@ -4,7 +4,7 @@ import { quizDAO, trackDAO } from '../../lib/dao';
 import { supabase } from '../../lib/supabase';
 import type { QuizQuestionWithAnswers, Track } from '../../types/app';
 import LoadingScreen from '../../components/common/LoadingScreen';
-import { ArrowUturnLeftIcon, PlusCircleIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowUturnLeftIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const AdminQuizzes = () => {
   const { quizId } = useParams<{ quizId: string }>();

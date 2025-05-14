@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect } from 'react';
 import { Transition } from '@headlessui/react';
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
-import type { NotificationType, NotificationProps } from '../../types/notification';
+import type { NotificationProps } from '../../types/notification';
 
 const Notification = ({
   type,

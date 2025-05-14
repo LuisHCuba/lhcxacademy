@@ -11,7 +11,7 @@ export const userDAO = {
 };
 
 export const trackDAO = {
-  async getTracks(page: number, pageSize: number) {
+  async getTracks() {
     return { data: [] }; // Retorna dados vazios temporariamente
   }
 };

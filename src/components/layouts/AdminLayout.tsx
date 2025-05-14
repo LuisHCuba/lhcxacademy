@@ -11,7 +11,6 @@ import {
   ChartBarIcon,
   HomeIcon,
   RectangleGroupIcon,
-  Cog6ToothIcon,
   QuestionMarkCircleIcon,
   AcademicCapIcon,
   ArrowLeftIcon

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type {
-  User, Department, Track, Video, Assignment, Progress,
-  QuizQuestion, QuizAnswer, QuizAttempt, Certificate,
+  User, Department, Track, Video, Assignment, 
+  QuizQuestion, Certificate,
   UserWithDepartment, DepartmentWithUserCount, TrackWithProgress,
   VideoWithProgress, AssignmentWithDetails, QuizQuestionWithAnswers,
   UserFilters, TrackFilters, AssignmentFilters,
