@@ -21,7 +21,12 @@ export default {
           950: '#082f49',
         },
       },
+      aspectRatio: {
+        '16/9': '16 / 9',
+      }
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/aspect-ratio'),
+  ],
 } 

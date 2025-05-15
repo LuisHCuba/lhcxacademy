@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { videoDAO, trackDAO } from '../lib/dao';
 import type { Video, Track, VideoWithProgress } from '../types/app';
@@ -9,40 +9,28 @@ import { useNotification } from '../context/NotificationContext';
 const LessonDetails = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { showNotification } = useNotification();
+  
+  // Estados básicos
   const [loading, setLoading] = useState(true);
   const [video, setVideo] = useState<Video | null>(null);
   const [track, setTrack] = useState<Track | null>(null);
-  const [progress, setProgress] = useState({
-    status: 'not_started' as 'not_started' | 'in_progress' | 'completed',
-    watchTime: 0,
-  });
   const [nextVideo, setNextVideo] = useState<VideoWithProgress | null>(null);
   const [prevVideo, setPrevVideo] = useState<VideoWithProgress | null>(null);
+  const [progress, setProgress] = useState<'not_started' | 'in_progress' | 'completed'>('not_started');
   
-  // Estado para o player do YouTube
-  const [player, setPlayer] = useState<any>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  
-  // Referência para o timer de salvamento do progresso
-  const saveProgressTimerRef = useRef<number | null>(null);
-  const playerTimerRef = useRef<number | null>(null);
-  // Estado para controlar se salvou o progresso ao sair da página
-  const savedOnUnmountRef = useRef(false);
-  
+  // Carregar dados do vídeo e trilha
   useEffect(() => {
-    const fetchVideoDetails = async () => {
+    const fetchData = async () => {
       if (!user || !lessonId) return;
       
-      setLoading(true);
       try {
+        setLoading(true);
+        
         // Buscar detalhes do vídeo
         const videoData = await videoDAO.getById(parseInt(lessonId));
         if (!videoData) {
-          console.error('Vídeo não encontrado');
+          showNotification('error', 'Erro', 'Vídeo não encontrado');
           setLoading(false);
           return;
         }
@@ -54,8 +42,8 @@ const LessonDetails = () => {
         const { data: videosData } = await videoDAO.getVideosByTrack(
           videoData.track_id,
           user.id,
-          1,  // página
-          100, // limite (assumindo que não haverá mais que 100 vídeos por trilha)
+          1,
+          100,
           'order_index',
           'asc'
         );
@@ -72,215 +60,57 @@ const LessonDetails = () => {
           setNextVideo(videosData[currentIndex + 1]);
         }
         
-        // Definir progresso inicial
+        // Definir status do progresso
         const currentProgress = videosData.find(v => v.id === parseInt(lessonId));
         if (currentProgress) {
-          setProgress({
-            status: currentProgress.status,
-            watchTime: currentProgress.watch_time,
-          });
-          setCurrentTime(currentProgress.watch_time);
+          setProgress(currentProgress.status || 'not_started');
         }
         
         setVideo(videoData);
         setTrack(trackData);
       } catch (error) {
         console.error('Erro ao carregar detalhes do vídeo:', error);
-        showNotification('error', 'Erro', 'Não foi possível carregar este vídeo. Tente novamente.');
+        showNotification('error', 'Erro', 'Não foi possível carregar este vídeo');
       } finally {
         setLoading(false);
       }
     };
     
-    fetchVideoDetails();
-    
-    // Limpar timer ao desmontar
-    return () => {
-      if (saveProgressTimerRef.current) {
-        clearInterval(saveProgressTimerRef.current);
-      }
-      
-      if (playerTimerRef.current) {
-        clearInterval(playerTimerRef.current);
-      }
-      
-      // Salvar progresso antes de sair da página (se ainda não salvou)
-      if (!savedOnUnmountRef.current && video && user) {
-        videoDAO.updateProgress(user.id, video.id, progress.status, progress.watchTime);
-        savedOnUnmountRef.current = true;
-      }
-    };
-  }, [user, lessonId, showNotification]);
+    fetchData();
+  }, [lessonId, user, showNotification]);
   
-  // Configurar salvamento automático de progresso
+  // Atualizar status do vídeo para "em andamento" quando for visualizado
   useEffect(() => {
-    if (video && user && !loading) {
-      // Iniciar como 'in_progress' se ainda não estiver concluído
-      if (progress.status === 'not_started') {
-        setProgress(prev => ({ ...prev, status: 'in_progress' }));
-      }
-      
-      // Configurar timer para salvar progresso a cada 30 segundos
-      saveProgressTimerRef.current = window.setInterval(() => {
-        videoDAO.updateProgress(user.id, video.id, progress.status, progress.watchTime);
-      }, 30000);
-    }
+    if (!user || !video || loading) return;
     
-    return () => {
-      if (saveProgressTimerRef.current) {
-        clearInterval(saveProgressTimerRef.current);
-      }
-    };
-  }, [video, user, loading, progress.status]);
-  
-  // Controlar o progresso do vídeo
-  const handleTimeUpdate = (currentTime: number) => {
-    setCurrentTime(currentTime);
-    setProgress(prev => ({ 
-      ...prev, 
-      watchTime: Math.max(prev.watchTime, Math.floor(currentTime)) 
-    }));
-    
-    // Verificar se o vídeo está quase no final (95% assistido)
-    if (totalDuration > 0 && currentTime >= totalDuration * 0.95 && progress.status !== 'completed') {
-      handleVideoComplete();
+    // Marcar como em progresso quando a página é carregada, se ainda não estiver concluído
+    if (progress === 'not_started') {
+      const newStatus = 'in_progress';
+      setProgress(newStatus);
+      videoDAO.updateProgress(user.id, video.id, newStatus, 0);
     }
-  };
-  
-  // Formatar tempo (segundos para MM:SS)
-  const formatTime = (timeInSeconds: number) => {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  }, [user, video, loading, progress]);
   
   // Marcar vídeo como concluído
-  const handleVideoComplete = async () => {
+  const handleComplete = async () => {
     if (!video || !user) return;
     
-    const newStatus = 'completed';
-    setProgress(prev => ({ ...prev, status: newStatus }));
-    
-    // Salvar o progresso
     try {
-      await videoDAO.updateProgress(user.id, video.id, newStatus, video.estimated_duration);
-      savedOnUnmountRef.current = true; // Marcamos que já salvou para evitar salvamento duplicado
+      const newStatus = 'completed';
+      setProgress(newStatus);
+      
+      await videoDAO.updateProgress(user.id, video.id, newStatus, 0);
       
       showNotification('success', 'Concluído', 'Vídeo marcado como concluído!');
     } catch (error) {
       console.error('Erro ao atualizar progresso:', error);
-      showNotification('error', 'Erro', 'Não foi possível atualizar o progresso.');
+      showNotification('error', 'Erro', 'Não foi possível atualizar o progresso');
     }
-  };
-  
-  // Renderizar o player do YouTube
-  const renderYouTubePlayer = () => {
-    if (!video) return null;
-    
-    // Função para inicializar o player do YouTube
-    // Esta função será chamada quando o API do YouTube estiver carregado
-    const initPlayer = () => {
-      if (!window.YT || !window.YT.Player) return;
-      
-      const ytPlayer = new window.YT.Player('youtube-player', {
-        videoId: video.youtube_id,
-        playerVars: {
-          autoplay: 1,
-          start: progress.watchTime,
-          rel: 0,
-          modestbranding: 1,
-          controls: 1
-        },
-        events: {
-          onStateChange: (event: any) => {
-            // Estado 1 = reproduzindo
-            setIsPlaying(event.data === 1);
-            
-            // Estado 0 = vídeo terminou
-            if (event.data === 0) {
-              handleVideoComplete();
-            }
-          },
-          onReady: (event: any) => {
-            // Armazenar referência ao player
-            setPlayer(event.target);
-            
-            // Obter duração total (só disponível quando o vídeo está pronto)
-            const duration = event.target.getDuration();
-            setTotalDuration(duration);
-            
-            // Configurar timer para atualizar o progresso a cada segundo
-            playerTimerRef.current = window.setInterval(() => {
-              const currentTime = event.target.getCurrentTime();
-              handleTimeUpdate(currentTime);
-            }, 1000);
-          }
-        }
-      });
-    };
-    
-    // Carrega a API do YouTube se ainda não estiver carregada
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-      
-      window.onYouTubeIframeAPIReady = initPlayer;
-    } else {
-      // Se a API já estiver carregada, inicializa o player diretamente
-      initPlayer();
-    }
-    
-    return (
-      <div className="aspect-w-16 aspect-h-9 bg-black rounded-t-lg overflow-hidden">
-        <div id="youtube-player"></div>
-      </div>
-    );
-  };
-  
-  // Componente de barra de progresso personalizada
-  const CustomProgressBar = () => {
-    const progressPercentage = totalDuration > 0 
-      ? (currentTime / totalDuration) * 100 
-      : 0;
-      
-    const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!player || !totalDuration) return;
-      
-      const progressBar = e.currentTarget;
-      const rect = progressBar.getBoundingClientRect();
-      const offsetX = e.clientX - rect.left;
-      const clickPercentage = offsetX / rect.width;
-      const seekTime = totalDuration * clickPercentage;
-      
-      // Buscar para a posição clicada
-      player.seekTo(seekTime, true);
-      setCurrentTime(seekTime);
-    };
-    
-    return (
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
-        <div 
-          className="h-2 w-full bg-gray-200 rounded-full cursor-pointer"
-          onClick={handleProgressBarClick}
-        >
-          <div 
-            className="h-full bg-primary-600 rounded-full" 
-            style={{ width: `${progressPercentage}%` }}
-          ></div>
-        </div>
-        <div className="flex justify-between text-xs text-gray-500 mt-1">
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(totalDuration)}</span>
-        </div>
-      </div>
-    );
   };
   
   if (loading) return <LoadingScreen />;
   if (!video || !track) return <div className="p-8 text-center">Vídeo não encontrado.</div>;
-
+  
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="mb-6">
@@ -296,11 +126,17 @@ const LessonDetails = () => {
       </div>
       
       <div className="bg-white rounded-lg shadow-xl overflow-hidden mb-6">
-        {/* Player de vídeo */}
-        {renderYouTubePlayer()}
-        
-        {/* Barra de progresso personalizada */}
-        <CustomProgressBar />
+        {/* Player de vídeo - iframe simples */}
+        <div className="relative pt-[56.25%] bg-black rounded-t-lg overflow-hidden">
+          <iframe 
+            className="absolute inset-0 w-full h-full"
+            src={`https://www.youtube.com/embed/${video.youtube_id}?autoplay=1&rel=0&modestbranding=1`}
+            title={video.title}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          ></iframe>
+        </div>
         
         {/* Informações do vídeo */}
         <div className="p-6">
@@ -315,15 +151,15 @@ const LessonDetails = () => {
             <span className="mx-2">•</span>
             
             <div className={`px-2 py-0.5 rounded-full text-xs ${
-              progress.status === 'completed' 
+              progress === 'completed' 
                 ? 'bg-emerald-100 text-emerald-800' 
-                : progress.status === 'in_progress'
+                : progress === 'in_progress'
                   ? 'bg-amber-100 text-amber-800'
                   : 'bg-gray-100 text-gray-800'
             }`}>
-              {progress.status === 'completed' 
+              {progress === 'completed' 
                 ? 'Concluído' 
-                : progress.status === 'in_progress'
+                : progress === 'in_progress'
                   ? 'Em andamento'
                   : 'Não iniciado'}
             </div>
@@ -333,23 +169,7 @@ const LessonDetails = () => {
             <p className="text-gray-700">{video.description}</p>
           </div>
           
-          {progress.status === 'in_progress' && totalDuration > 0 && (
-            <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
-              <h3 className="text-amber-800 font-medium mb-2">Seu progresso</h3>
-              <div className="flex justify-between text-sm text-amber-700 mb-1">
-                <span>Você já assistiu {Math.round((currentTime / totalDuration) * 100)}% deste vídeo</span>
-                <span>{formatTime(currentTime)} / {formatTime(totalDuration)}</span>
-              </div>
-              <div className="w-full bg-amber-200 rounded-full h-2.5">
-                <div 
-                  className="bg-amber-500 h-2.5 rounded-full" 
-                  style={{ width: `${(currentTime / totalDuration) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
-          
-          {progress.status === 'completed' && (
+          {progress === 'completed' && (
             <div className="mt-6 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
               <div className="flex items-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-emerald-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -376,9 +196,9 @@ const LessonDetails = () => {
               <div></div>
             )}
             
-            {progress.status !== 'completed' && (
+            {progress !== 'completed' && (
               <button 
-                onClick={handleVideoComplete}
+                onClick={handleComplete}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -415,13 +235,5 @@ const LessonDetails = () => {
     </div>
   );
 };
-
-// Definir interface global para o player do YouTube
-declare global {
-  interface Window {
-    YT: any;
-    onYouTubeIframeAPIReady: () => void;
-  }
-}
 
 export default LessonDetails; 

@@ -135,7 +135,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <div className="flex-shrink-0 flex items-center px-4">
                 <img
                   className="h-8 w-auto"
-                  src="/logo.svg"
+                  src="/logo.jpeg"
                   alt="GoAcademy"
                 />
               </div>
@@ -181,10 +181,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <div className="flex items-center h-16 flex-shrink-0 px-4 bg-white border-b border-gray-200">
               <img
                 className="h-8 w-auto"
-                src="/logo.svg"
+                src="/logo.jpeg"
                 alt="GoAcademy"
               />
-              <span className="ml-2 text-lg font-semibold text-gray-800">GoAcademy</span>
             </div>
             <div className="flex-1 flex flex-col overflow-y-auto">
               <nav className="flex-1 px-2 py-4 bg-white space-y-1">
